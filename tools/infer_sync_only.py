@@ -12,11 +12,11 @@ import os
 import pickle
 from typing import Dict, List, Tuple
 
+import cv2
 import numpy as np
 import torch
 from scipy.spatial.distance import cdist
 from scipy.stats import kendalltau
-from torchvision.io import read_video
 
 from models import build_model
 from utils.parser import load_config
@@ -62,6 +62,23 @@ def preprocess_video(video: torch.Tensor) -> torch.Tensor:
     return video.permute(0, 3, 1, 2).float() / 255.0
 
 
+def read_video_cv2(video_path: str) -> torch.Tensor:
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Failed to open video: {video_path}")
+    frames = []
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(frame)
+    cap.release()
+    if not frames:
+        raise ValueError(f"No frames decoded: {video_path}")
+    return torch.from_numpy(np.stack(frames, axis=0))
+
+
 def center_crop_resize(video: torch.Tensor, image_size: int) -> torch.Tensor:
     # Lightweight preprocessing to match eval path more closely.
     # video shape: T C H W
@@ -93,7 +110,7 @@ def load_model(cfg, checkpoint_path: str, device: torch.device) -> torch.nn.Modu
 
 @torch.no_grad()
 def extract_embedding(model: torch.nn.Module, cfg, video_path: str, device: torch.device) -> np.ndarray:
-    video, _, _ = read_video(video_path, pts_unit="sec")
+    video = read_video_cv2(video_path)
     if video.shape[0] < 2:
         raise ValueError(f"Video too short: {video_path}")
     video = preprocess_video(video).to(device)

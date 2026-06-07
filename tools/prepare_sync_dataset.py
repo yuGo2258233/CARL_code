@@ -15,8 +15,8 @@ import pickle
 import shutil
 from typing import Dict, List, Tuple
 
+import cv2
 import torch
-from torchvision.io import read_video
 
 
 def list_mp4_files(input_dir: str) -> List[str]:
@@ -48,6 +48,17 @@ def split_train_val(items: List[Dict], val_ratio: float) -> Tuple[List[Dict], Li
     val_items = items[:n_val]
     train_items = items[n_val:]
     return train_items, val_items
+
+
+def get_num_frames(video_path: str) -> int:
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Failed to open video: {video_path}")
+    num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    if num_frames <= 0:
+        raise ValueError(f"Failed to read frame count: {video_path}")
+    return num_frames
 
 
 def main() -> None:
@@ -91,8 +102,7 @@ def main() -> None:
             rel_video_path = os.path.relpath(src_path, args.output_dir)
             video_path_for_read = src_path
 
-        video, _, _ = read_video(video_path_for_read, pts_unit="sec")
-        seq_len = int(video.shape[0])
+        seq_len = get_num_frames(video_path_for_read)
         if seq_len <= 1:
             raise ValueError(f"Video too short for sync: {src_path} (frames={seq_len})")
 
